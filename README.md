@@ -1,2 +1,2 @@
-# python-projects
-Collection of my python projects
+# Miscellaneous projects
+Collection of miscellaneous projects.
