@@ -3,6 +3,7 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
+# Rotation matrices
 Rx = np.array([[ 1, 0, 0],
                [ 0, 0,-1],
                [ 0, 1, 0]])
@@ -102,8 +103,6 @@ class GameState:
             print(pb.name, end=' ')
         print()
 
-global flag
-
 def solve(game):
     if not game.is_solved and len(game.block_candidates) > 0:
         placement_block = game.block_candidates.pop()
@@ -133,7 +132,13 @@ def plot_solution(game):
     plt.title('Cube solution')
     for c, b in enumerate(game.placed_blocks):
         coords = b.coords + b.origin[:,None]
-        ax.scatter(coords[0], coords[1], coords[2], color=f'C{c}', lw=10, alpha=1)
+        ax.scatter(coords[0], coords[1], coords[2], color=f'C{c}', s=200, alpha=1)
+        for cube1 in b:
+            for cube2 in b:
+                c1 = cube1 + b.origin
+                c2 = cube2 + b.origin
+                if np.sum((c1 - c2)**2) == 1:
+                    ax.plot3D((c1[0], c2[0]), (c1[1], c2[1]), (c1[2], c2[2]), color=f'C{c}', lw=10)
     plt.show()
 
 
@@ -180,8 +185,6 @@ def main():
         print(len(game_solved.placed_blocks))
         for b in game_solved.placed_blocks:
             print(b.name)
-            print(b.origin)
-            print(b.direction)
             print(b.coords + b.origin[:,None])
         plot_solution(game_solved)
     else:
