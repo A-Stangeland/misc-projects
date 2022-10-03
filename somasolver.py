@@ -1,5 +1,6 @@
+from locale import normalize
 import numpy as np
-from copy import deepcopy
+from copy import copy, deepcopy
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
@@ -21,7 +22,9 @@ class Block:
         self.coord_len = len(coords)
         self.coords = np.array(coords).T
         self.origin = np.array([0,0,0])
-        self.direction = np.array([[1],[0],[0]])
+        self.unique_rotations = self.generate_unique_rotations()
+        # self.direction = np.array([[1],[0],[0]])
+        self.bounding_box = np.max(self.coords, axis=1)
         self.name = name
 
     def __len__(self):
@@ -29,30 +32,95 @@ class Block:
 
     def __getitem__(self, i):
         return self.coords[:,i]
+    
+    def set_coords(self, new_coords):
+        self.coords = new_coords
+        self.bounding_box = np.max(self.coords, axis=1)
 
     def set_origin(self, origin_coords):
         self.origin = np.array(origin_coords)
 
     def roll(self):
         self.coords = Rx @ self.coords
-        self.direction = Rx @ self.direction
+        # self.direction = Rx @ self.direction
     
     def turn(self):
         self.coords = Rz @ self.coords
-        self.direction = Rz @ self.direction
+        # self.direction = Rz @ self.direction
     
-    def rotations(self):
-        """Generator for the 24 unique 3d rotations"""
+    @staticmethod
+    def equivalent_coords(coord1, coord2):
+        if coord1.shape != coord2.shape:
+            return False
+        n = coord1.shape[1]
+        for i in range(n):
+            c1 = coord1[:,i]
+            c1_in_coord2 = False
+            for j in range(n):
+                c2 = coord2[:,j]
+                if (c1 == c2).all():
+                    c1_in_coord2 = True
+            if not c1_in_coord2:
+                return False
+        return True
+                
+
+    def _get_all_rotations(self):
+        """Return a list of the 24 3d rotations"""
+        rotations = []
         for cycle in range(2):
             for step in range(3): 
                 self.roll()
-                yield(self.coords)
+                rotations.append(copy(self.coords))
                 for i in range(3):
                     self.turn()
-                    yield(self.coords)
+                    rotations.append(copy(self.coords))
             self.roll()
             self.turn()
             self.roll()
+        return rotations
+    
+    def normalize_rotations(self, rotations):
+        normalized_rotations = []
+        for coords in rotations:
+            normalized_rotations.append(coords - np.min(coords, axis=1)[:,None])
+        return normalized_rotations
+
+    def generate_unique_rotations(self):
+        """Return a list of unique 3d rotations with duplicates due to symmetry removed"""
+        all_rotations = self._get_all_rotations()
+        normalized_rotations = self.normalize_rotations(all_rotations)
+        unique_rotations = []
+        for new_rot in normalized_rotations:
+            is_duplicate = False
+            for unique_rot in unique_rotations:
+                # if (new_rot == unique_rot).all():
+                if self.equivalent_coords(new_rot, unique_rot):
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                unique_rotations.append(new_rot)
+        return unique_rotations
+
+
+    def rotations(self):
+        for rot in self.unique_rotations:
+            self_copy = deepcopy(self)
+            self_copy.set_coords(rot)
+            yield(self_copy)
+
+    # def rotations(self):
+    #     """Generator for the 24 unique 3d rotations"""
+    #     for cycle in range(2):
+    #         for step in range(3): 
+    #             self.roll()
+    #             yield(self.coords)
+    #             for i in range(3):
+    #                 self.turn()
+    #                 yield(self.coords)
+    #         self.roll()
+    #         self.turn()
+    #         self.roll()
 
 class Box:
     def __init__(self):
@@ -104,6 +172,7 @@ class GameState:
         print()
 
 def solve(game):
+    game.print()
     if not game.is_solved and len(game.block_candidates) > 0:
         placement_block = game.block_candidates.pop()
         for i in range(3):
@@ -116,9 +185,11 @@ def solve(game):
                     for block_rotation in placement_block.rotations():
                         game_copy = deepcopy(game)
                         try:
-                            placement_block_copy = deepcopy(placement_block)
-                            game_copy.box.place(placement_block_copy, [i, j, k])
-                            game_copy.placed_blocks.append(placement_block_copy)
+                            game_copy.box.place(block_rotation, [i, j, k])
+                            game_copy.placed_blocks.append(block_rotation)
+                            # placement_block_copy = deepcopy(placement_block)
+                            # game_copy.box.place(placement_block_copy, [i, j, k])
+                            # game_copy.placed_blocks.append(placement_block_copy)
                             game_copy = solve(game_copy)
                             if game_copy.is_solved:
                                 return game_copy
